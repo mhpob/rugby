@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE)
 ```
 
 ```{r}
-library(rvest); library(dplyr)
+library(rvest); library(httr); library(dplyr)
 
 # Import roster
 prr_roster <- read_html('https://usarugby.sportlomo.com/wp-admin/admin-ajax.php?action=getClubMembers&id=11193') %>% 
@@ -45,6 +45,8 @@ This report was automatically created at `r Sys.time()` using the currently-avai
   - Potomac Society of Rugby Football Referees (PSRFR; PRR) currently has `r n_regis` people registered with USAR.
   - There are `r filter(n_regis_cat, Category == 'Referee 21-22')$n` people registered in the general category, and `r filter(n_regis_cat, Category == 'U18 Referee')$n` registered in the U18 category.
 
+
+## Referees registered with PRR
 ```{r}
 output <- prr_roster %>% 
   select(`First Name`, `Last Name`, Category) %>% 
@@ -53,3 +55,91 @@ output <- prr_roster %>%
 knitr::kable(output, format = "simple")
 ```
 
+## Referees registered with their club, but not PRR
+
+```{r}
+# Get list of clubs in the CRU
+cru <- POST(
+  'https://usarugby.sportlomo.com/wp-admin/admin-ajax.php?action=clubMapData',
+  body = list(
+    id = 6468,
+    fetchValues = 'Clubs',
+    defaultLabel = 'Club+Name',
+    confernce = 'Capital+Rugby+Union',
+    typeId = 6853
+  ),
+  encode = 'form'
+)
+
+cru <- cru %>% 
+  content(options = 'HUGE') %>% 
+  html_element('body') %>% 
+  html_element('p')  %>% 
+  html_elements('option')
+
+name <- cru %>% html_text(trim = T)
+name <- gsub('club_contents.*|[ \t]{2}|[\\"\\,]|\\\\n', '', name)
+
+values <- cru %>% html_attr('value')
+values <- gsub('[\\"\\\\]', '', values)
+
+
+cru <- tibble(name = name, value = values)[-1, ]
+
+
+cru <- cbind(cru, tibble(prr = c(T, T, T, T, T,
+                                 F, F, F, 
+                                 T, T, T,
+                                 F, 
+                                 T, T, T, T, T,
+                                 F,
+                                 T, 
+                                 F, F,
+                                 T, T, T,
+                                 F, F, F, F,
+                                 T, T, T, T, T,
+                                 F,
+                                 T, T,
+                                 F, F, F, F, F, F, F,
+                                 T, T, T, T,
+                                 F, F,
+                                 T, T, T, T, T, T, T, T, T)))
+
+# Pull registrations for PRR-area clubs
+cru_registrations <- lapply(
+  cru[cru$prr == T,]$value,
+  function(x){
+    tryCatch({
+      url <- paste0(
+        'https://usarugby.sportlomo.com/wp-admin/admin-ajax.php?action=getClubMembers&id=',
+        x
+      )
+      
+      read_html(url) %>% 
+        html_table(header = T) %>% 
+        .[[1]]
+    },
+    error = function(e) e
+    )
+  })
+
+errs <- sapply(cru_registrations, function(x) any(class(x) == 'error'))
+
+cru_registrations <- cru_registrations[!errs]
+
+errs <- sapply(cru_registrations, function(x) nrow(x) == 0)
+
+cru_registrations <- cru_registrations[!errs]
+
+cru_registrations <- bind_rows(cru_registrations)
+
+referees <- cru_registrations %>% 
+  filter(grepl('Referee', Category)) %>% 
+  mutate_at(vars(matches('Name')), tolower) %>% 
+  group_by(Category) %>% 
+  distinct(`First Name`, `Last Name`, .keep_all = T)
+```
+
+
+
+### Capital Rugby Union
