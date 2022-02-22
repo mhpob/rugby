@@ -1,0 +1,55 @@
+---
+title: "Potomac USA Rugby Registrations"
+author: "Mike O'Brien"
+date: "2/22/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+```{r}
+library(rvest); library(dplyr)
+
+# Import roster
+prr_roster <- read_html('https://usarugby.sportlomo.com/wp-admin/admin-ajax.php?action=getClubMembers&id=11193') %>% 
+  html_table(header = T) %>% 
+  .[[1]]
+
+prr_roster <- prr_roster %>% 
+  mutate_at(vars(matches('Name')), tolower) %>% 
+  group_by(Category) %>% 
+  distinct(`First Name`, `Last Name`, .keep_all = T)
+
+# Number of individual registrants
+n_regis <- prr_roster %>% 
+  ungroup() %>% 
+  distinct(`First Name`, `Last Name`) %>% 
+  nrow()
+
+# Number by category
+n_regis_cat <- prr_roster %>% 
+  tally()
+
+# Those registered as U18
+n_regis_u18 <- prr_roster %>% 
+  filter(Category == 'U18 Referee') %>% 
+  select(`First Name`, `Last Name`, Category)
+```
+
+This report was automatically created at `r Sys.time()` using the currently-available USA Rugby (USAR) public roster on Sportlomo.
+
+  - Potomac Society of Rugby Football Referees (PSRFR; PRR) currently has `r n_regis` people registered with USAR.
+  - There are `r filter(n_regis_cat, Category == 'Referee 21-22')$n` people registered in the general category, and `r filter(n_regis_cat, Category == 'U18 Referee')$n` registered in the U18 category.
+
+```{r}
+output <- prr_roster %>% 
+  select(`First Name`, `Last Name`, Category) %>% 
+  arrange(Category, `Last Name`)
+
+knitr::kable(output, format = "simple")
+```
+
