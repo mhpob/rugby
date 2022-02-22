@@ -11,7 +11,7 @@ output:
 knitr::opts_chunk$set(echo = FALSE, message = FALSE)
 ```
 
-```{r}
+```{r prr-grab}
 library(rvest); library(httr); library(dplyr)
 
 # Import roster
@@ -38,26 +38,13 @@ n_regis_cat <- prr_roster %>%
 n_regis_u18 <- prr_roster %>% 
   filter(Category == 'U18 Referee') %>% 
   select(`First Name`, `Last Name`, Category)
-```
 
-This report was automatically created at `r Sys.time()` using the currently-available USA Rugby (USAR) public roster on Sportlomo.
-
-  - Potomac Society of Rugby Football Referees (PSRFR; PRR) currently has `r n_regis` people registered with USAR.
-  - There are `r filter(n_regis_cat, Category == 'Referee 21-22')$n` people registered in the general category, and `r filter(n_regis_cat, Category == 'U18 Referee')$n` registered in the U18 category.
-
-
-## Referees registered with PRR
-```{r}
-output <- prr_roster %>% 
+prr_output <- prr_roster %>% 
   select(`First Name`, `Last Name`, Category) %>% 
   arrange(Category, `Last Name`)
-
-knitr::kable(output, format = "simple")
 ```
 
-## Referees registered with their club, but not PRR
-
-```{r}
+```{r cru-clubs}
 # Get list of clubs in the CRU
 cru <- POST(
   'https://usarugby.sportlomo.com/wp-admin/admin-ajax.php?action=clubMapData',
@@ -104,7 +91,8 @@ cru <- cbind(cru, tibble(prr = c(T, T, T, T, T,
                                  T, T, T, T,
                                  F, F,
                                  T, T, T, T, T, T, T, T, T)))
-
+```
+```{r cru-membership-scrape}
 # Pull registrations for PRR-area clubs
 cru_registrations <- lapply(
   cru[cru$prr == T,]$value,
@@ -122,7 +110,8 @@ cru_registrations <- lapply(
     error = function(e) e
     )
   })
-
+```
+```{r cru-membership-clean}
 errs <- sapply(cru_registrations, function(x) any(class(x) == 'error'))
 
 cru_registrations <- cru_registrations[!errs]
@@ -132,14 +121,37 @@ errs <- sapply(cru_registrations, function(x) nrow(x) == 0)
 cru_registrations <- cru_registrations[!errs]
 
 cru_registrations <- bind_rows(cru_registrations)
-
-referees <- cru_registrations %>% 
+```
+```{r cru-referees}
+club_referees <- cru_registrations %>% 
   filter(grepl('Referee', Category)) %>% 
   mutate_at(vars(matches('Name')), tolower) %>% 
   group_by(Category) %>% 
   distinct(`First Name`, `Last Name`, .keep_all = T)
+
+
+club_referees <- anti_join(club_referees,
+                           prr_roster,
+                           by = c('First Name', 'Last Name')) %>% 
+  ungroup() %>% 
+  select_at(vars(matches('Name'), Club)) %>% 
+  arrange(`Last Name`)
 ```
 
+This report was automatically created at `r Sys.time()` using the currently-available USA Rugby (USAR) public roster on Sportlomo. Any person who is registered as a referee with a U19 team/club and *NOT* dual-registered with the Potomac Society of Rugby Football Referees (PSFRF; PRR) is not counted below.
 
+  - PRR currently has `r n_regis` people registered with USAR.
+  - There are `r filter(n_regis_cat, Category == 'Referee 21-22')$n` people registered in the general category, and `r filter(n_regis_cat, Category == 'U18 Referee')$n` registered in the U18 category.
+  - There are `r nrow(club_referees)` people registered as a referee with their club, but not PRR.
 
+## Referees registered with PRR
+```{r}
+knitr::kable(prr_output, format = "simple")
+```
+
+## Referees registered with their club, but not PRR
 ### Capital Rugby Union
+```{r}
+knitr::kable(club_referees, format = "simple")
+```
+
