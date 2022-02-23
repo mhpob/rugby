@@ -1,0 +1,156 @@
+---
+title: "Virginia Referee Registrations"
+author: "Mike O'Brien"
+date: "2/22/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+```
+
+```{r prr-grab}
+library(rvest); library(httr); library(dplyr)
+
+# Import roster
+rsv_roster <- read_html('https://usarugby.sportlomo.com/wp-admin/admin-ajax.php?action=getClubMembers&id=11220') %>% 
+  html_table(header = T) %>% 
+  .[[1]]
+
+rsv_roster <- rsv_roster %>% 
+  mutate_at(vars(matches('Name')), tolower) %>% 
+  group_by(Category) %>% 
+  distinct(`First Name`, `Last Name`, .keep_all = T)
+
+# Number of individual registrants
+n_regis <- rsv_roster %>% 
+  ungroup() %>% 
+  distinct(`First Name`, `Last Name`) %>% 
+  nrow()
+
+# Number by category
+n_regis_cat <- rsv_roster %>% 
+  tally()
+
+# Those registered as U18
+n_regis_u18 <- rsv_roster %>% 
+  filter(Category == 'U18 Referee') %>% 
+  select(`First Name`, `Last Name`, Category)
+
+rsv_output <- rsv_roster %>% 
+  select(`First Name`, `Last Name`, Category) %>% 
+  arrange(Category, `Last Name`)
+```
+
+```{r cru-clubs}
+# Get list of clubs in the CRU
+cru <- POST(
+  'https://usarugby.sportlomo.com/wp-admin/admin-ajax.php?action=clubMapData',
+  body = list(
+    id = 6468,
+    fetchValues = 'Clubs',
+    defaultLabel = 'Club+Name',
+    confernce = 'Capital+Rugby+Union',
+    typeId = 6853
+  ),
+  encode = 'form'
+)
+
+cru <- cru %>% 
+  content(options = 'HUGE') %>% 
+  html_element('body') %>% 
+  html_element('p')  %>% 
+  html_elements('option')
+
+name <- cru %>% html_text(trim = T)
+name <- gsub('club_contents.*|[ \t]{2}|[\\"\\,]|\\\\n', '', name)
+
+values <- cru %>% html_attr('value')
+values <- gsub('[\\"\\\\]', '', values)
+
+
+cru <- tibble(name = name, value = values)[-1, ]
+
+
+cru <- cbind(cru, tibble(society = c(rep('PRR', times = 5),
+                                     rep('RSV', times = 3), 
+                                     rep('PRR', times = 3),
+                                     'RSV', 
+                                     rep('PRR', times = 5),
+                                     'RSV',
+                                     'PRR', 
+                                     rep('RSV', times = 2),
+                                     rep('PRR', times = 3),
+                                     rep('RSV', times = 4),
+                                     rep('PRR', times = 5),
+                                     'Allegheny',
+                                     rep('PRR', times = 2),
+                                     rep('RSV', times = 7),
+                                     rep('PRR', times = 4),
+                                     rep('RSV', times = 2),
+                                     rep('PRR', times = 9))))
+```
+```{r cru-membership-scrape}
+# Pull registrations for RSV-area clubs
+cru_registrations <- lapply(
+  cru[cru$society == 'RSV',]$value,
+  function(x){
+    tryCatch({
+      url <- paste0(
+        'https://usarugby.sportlomo.com/wp-admin/admin-ajax.php?action=getClubMembers&id=',
+        x
+      )
+      
+      read_html(url) %>% 
+        html_table(header = T) %>% 
+        .[[1]]
+    },
+    error = function(e) e
+    )
+  })
+```
+```{r cru-membership-clean}
+errs <- sapply(cru_registrations, function(x) any(class(x) == 'error'))
+
+cru_registrations <- cru_registrations[!errs]
+
+errs <- sapply(cru_registrations, function(x) nrow(x) == 0)
+
+cru_registrations <- cru_registrations[!errs]
+
+cru_registrations <- bind_rows(cru_registrations)
+```
+```{r cru-referees}
+club_referees <- cru_registrations %>% 
+  filter(grepl('Referee', Category)) %>% 
+  mutate_at(vars(matches('Name')), tolower) %>% 
+  group_by(Category) %>% 
+  distinct(`First Name`, `Last Name`, .keep_all = T)
+
+
+club_referees <- anti_join(club_referees,
+                           rsv_roster,
+                           by = c('First Name', 'Last Name')) %>% 
+  ungroup() %>% 
+  select_at(vars(matches('Name'), Club)) %>% 
+  arrange(`Last Name`)
+```
+
+This report was automatically created at `r Sys.time()` using the currently-available USA Rugby (USAR) public roster on Sportlomo. Any person who is registered as a referee with a U19 team/club and *NOT* dual-registered with the Referee Society of Virginia (RSV) is not counted below.
+
+  - RSV currently has `r n_regis` people registered with USAR.
+  - There are `r filter(n_regis_cat, Category == 'Referee 21-22')$n` people registered in the general category, and `r filter(n_regis_cat, Category == 'U18 Referee')$n` registered in the U18 category.
+  - There are `r nrow(club_referees)` people registered as a referee with their club, but not RSV.
+
+## Referees registered with RSV
+```{r}
+knitr::kable(rsv_output, format = "simple")
+```
+
+## Referees registered with their club, but not PRR
+### Capital Rugby Union
+```{r}
+knitr::kable(club_referees, format = "simple")
+```
