@@ -149,7 +149,7 @@ This report was automatically created at `r Sys.time()` using the currently-avai
 knitr::kable(rsv_output, format = "simple")
 ```
 
-## Referees registered with their club, but not PRR
+## Referees registered with their club, but not RSV
 ### Capital Rugby Union
 ```{r}
 knitr::kable(club_referees, format = "simple")
