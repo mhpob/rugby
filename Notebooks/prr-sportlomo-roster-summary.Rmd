@@ -74,23 +74,23 @@ values <- gsub('[\\"\\\\]', '', values)
 cru <- tibble(name = name, value = values)[-1, ]
 
 
-cru <- cbind(cru, tibble(prr = c(T, T, T, T, T,
-                                 F, F, F, 
-                                 T, T, T,
-                                 F, 
-                                 T, T, T, T, T,
-                                 F,
-                                 T, 
-                                 F, F,
-                                 T, T, T,
-                                 F, F, F, F,
-                                 T, T, T, T, T,
-                                 F,
-                                 T, T,
-                                 F, F, F, F, F, F, F,
-                                 T, T, T, T,
-                                 F, F,
-                                 T, T, T, T, T, T, T, T, T)))
+cru <- cbind(cru, tibble(society = c(rep('PRR', times = 5),
+                                     rep('RSV', times = 3), 
+                                     rep('PRR', times = 3),
+                                     'RSV', 
+                                     rep('PRR', times = 5),
+                                     'RSV',
+                                     'PRR', 
+                                     rep('RSV', times = 2),
+                                     rep('PRR', times = 3),
+                                     rep('RSV', times = 4),
+                                     rep('PRR', times = 5),
+                                     'Allegheny',
+                                     rep('PRR', times = 2),
+                                     rep('RSV', times = 7),
+                                     rep('PRR', times = 4),
+                                     rep('RSV', times = 2),
+                                     rep('PRR', times = 9))))
 ```
 ```{r cru-membership-scrape}
 # Pull registrations for PRR-area clubs
