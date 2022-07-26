@@ -80,9 +80,13 @@ ggplot(data = Nrefs) +
   scale_fill_viridis_d(option = 'C') +
   coord_flip() +
   theme_minimal() +
-  theme(axis.text.y = element_text(color = ifelse(
-                                     grepl('Potomac|New England|New York|Penn|Virginia',
-                                           rev(Nrefs_order$Region)), 'red', 'black')),
+  theme(
+    # axis.text.y = element_text(color = ifelse(
+    #                                  grepl('Potomac|New England|New York|Penn|Virginia',
+    #                                        rev(Nrefs_order$Region)), 'red', 'black')),
+    axis.text.y = element_text(color = ifelse(
+      grepl('Potomac|Penn|Virginia',
+            rev(Nrefs_order$Region)), 'red', 'black')),
         axis.text = element_text(size = 12),
         axis.title = element_blank(),
         legend.position = c(0.9, 0.7))
@@ -105,5 +109,9 @@ ggplot(data = Nrefs, aes(x = '',  y = n, fill = Pathways)) +
         axis.text = element_blank(),
         legend.text = element_text(size = 26))
 
-
+referees |> 
+  filter(grepl('Potomac|Penn|Virginia', Region)) |> 
+  tally() |> 
+  ungroup() |> 
+  summarize(sum(n))
 
